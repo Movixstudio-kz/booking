@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { SiteHeader } from "@/components/layout/SiteHeader";
-import { businesses } from "@/features/landing/businesses";
+import { SiteHeader } from "@/components/ui/SiteHeader";
+import { businesses } from "@/features/landing/data/businesses";
+import { benefits } from "@/features/landing/data/benefits";
 
 function ArrowIcon() {
   return <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 8h9M8.5 3.5 13 8l-4.5 4.5" /></svg>;
@@ -17,7 +18,7 @@ export default function HomePage() {
           <p className="mt-7 max-w-lg text-lg leading-8 text-[#607068]">KARO Booking помогает принимать клиентов 24/7, видеть расписание команды и уделять больше времени своему делу.</p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <Link href="/booking" className="inline-flex items-center gap-2 rounded-full bg-[#10231d] px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#10231d]/10 transition hover:-translate-y-0.5 hover:bg-[#244137]">Начать бесплатно <ArrowIcon /></Link>
-            <a href="#businesses" className="rounded-full px-5 py-3.5 text-sm font-semibold text-[#486055] transition hover:bg-[#e8ede3]">Узнать больше</a>
+            <a href="#demo" className="rounded-full border border-[#cfd8cf] bg-white px-5 py-3.5 text-sm font-semibold text-[#486055] transition hover:border-[#9faea2] hover:bg-[#f9fbf7]">Демо</a>
           </div>
           <p className="mt-5 text-sm text-[#839087]">Без карты · Настройка за несколько минут</p>
         </div>
@@ -38,7 +39,11 @@ export default function HomePage() {
         </div>
       </section>
       <section id="businesses" className="border-y border-[#dfe5da] bg-[#eef2ea] py-16 sm:py-20">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8"><p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#619276]">Подходит для вас</p><div className="mt-4 flex flex-col justify-between gap-8 md:flex-row md:items-end"><h2 className="max-w-xl text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">Любой бизнес, который ценит время клиентов</h2><p className="max-w-xs text-[#607068]">Гибко адаптируется к вашим услугам, специалистам и графику.</p></div><div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{businesses.map((business, index) => <div key={business} className="group flex min-h-28 flex-col justify-between rounded-2xl bg-white p-4 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-[#315343]/5"><span className="grid size-8 place-items-center rounded-xl bg-[#e7f8ed] text-sm font-bold text-[#337152]">0{index + 1}</span><span className="text-sm font-semibold">{business}</span></div>)}</div></div>
+        <div className="mx-auto max-w-7xl px-5 sm:px-8"><p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#619276]">Для кого подходит</p><div className="mt-4 flex flex-col justify-between gap-8 md:flex-row md:items-end"><h2 className="max-w-xl text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">Любой бизнес, который ценит время клиентов</h2><p className="max-w-xs text-[#607068]">Гибко адаптируется к вашим услугам, специалистам и графику.</p></div><div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3">{businesses.map((business, index) => <div key={business} className="group flex min-h-28 flex-col justify-between rounded-2xl bg-white p-4 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-[#315343]/5"><span className="grid size-8 place-items-center rounded-xl bg-[#e7f8ed] text-sm font-bold text-[#337152]">0{index + 1}</span><span className="text-sm font-semibold">{business}</span></div>)}</div></div>
+      </section>
+      <section id="demo" className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20">
+        <div className="flex flex-col justify-between gap-7 md:flex-row md:items-end"><div><p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#619276]">Возможности</p><h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">Всё необходимое для уверенной работы с записью</h2></div><p className="max-w-sm text-[#607068]">Начните с простого — KARO Booking будет расти вместе с вашим бизнесом.</p></div>
+        <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{benefits.map((benefit) => <article key={benefit.title} className="min-h-56 rounded-2xl border border-[#dfe5da] bg-white p-5"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-[#619276]">{benefit.number}</span>{benefit.soon && <span className="rounded-full bg-[#fff2d7] px-2.5 py-1 text-xs font-semibold text-[#916420]">Скоро</span>}</div><div className="mt-20"><h3 className="text-lg font-semibold tracking-[-0.03em]">{benefit.title}</h3><p className="mt-2 text-sm leading-6 text-[#607068]">{benefit.description}</p></div></article>)}</div>
       </section>
       <footer className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-8 text-sm text-[#607068] sm:flex-row sm:items-center sm:justify-between sm:px-8"><span>© {new Date().getFullYear()} KARO Booking</span><span>Онлайн-запись, которая работает для вас</span></footer>
     </main>
