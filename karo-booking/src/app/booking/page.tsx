@@ -1,5 +1,5 @@
-import { AppPlaceholder } from "@/components/ui/AppPlaceholder";
+import { BookingFlow } from "@/features/booking/components";
 
 export default function BookingPage() {
-  return <AppPlaceholder title="Онлайн-запись" description="Здесь клиенты смогут выбрать услугу, специалиста и удобное время для визита." />;
+  return <BookingFlow />;
 }
