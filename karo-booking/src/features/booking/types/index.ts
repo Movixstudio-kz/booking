@@ -26,6 +26,8 @@ export type BookingRecord = {
   clientName: string;
   contact: string;
   price: number;
+  durationMinutes: number;
+  comment: string;
   status: BookingStatus;
   createdAt: string;
 };

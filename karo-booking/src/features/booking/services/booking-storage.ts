@@ -1,10 +1,20 @@
 import type { BookingRecord, BookingStatus, CreateBookingResult } from "@/features/booking/types";
+import { defaultServices } from "@/features/services/data";
 
 const STORAGE_KEY = "karo-booking:appointments";
 export const BOOKINGS_CHANGED_EVENT = "karo-booking:appointments-changed";
 const statuses: BookingStatus[] = ["new", "confirmed", "in_progress", "completed", "cancelled"];
 
-type LegacyBookingRecord = Omit<BookingRecord, "status"> & { status?: BookingStatus };
+type LegacyBookingRecord = Omit<BookingRecord, "status" | "durationMinutes" | "comment"> & {
+  status?: BookingStatus;
+  durationMinutes?: number;
+  comment?: string;
+};
+
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
 
 function isBookingRecord(value: unknown): value is LegacyBookingRecord {
   if (typeof value !== "object" || value === null) return false;
@@ -21,6 +31,8 @@ function isBookingRecord(value: unknown): value is LegacyBookingRecord {
     typeof record.clientName === "string" &&
     typeof record.contact === "string" &&
     typeof record.price === "number" &&
+    (record.durationMinutes === undefined || typeof record.durationMinutes === "number") &&
+    (record.comment === undefined || typeof record.comment === "string") &&
     (record.status === undefined || (typeof record.status === "string" && statuses.includes(record.status as BookingStatus))) &&
     typeof record.createdAt === "string"
   );
@@ -34,7 +46,12 @@ export function loadBookings(): BookingRecord[] {
     if (!rawValue) return [];
 
     const parsedValue: unknown = JSON.parse(rawValue) as unknown;
-    return Array.isArray(parsedValue) ? parsedValue.filter(isBookingRecord).map((booking) => ({ ...booking, status: booking.status ?? "new" })) : [];
+    return Array.isArray(parsedValue) ? parsedValue.filter(isBookingRecord).map((booking) => ({
+      ...booking,
+      durationMinutes: booking.durationMinutes ?? defaultServices.find((service) => service.id === booking.serviceId)?.durationMinutes ?? 60,
+      comment: booking.comment ?? "",
+      status: booking.status ?? "new",
+    })) : [];
   } catch {
     return [];
   }
@@ -45,10 +62,17 @@ export function isSlotBooked(
   staffId: string,
   date: string,
   time: string,
+  durationMinutes = 1,
+  excludeBookingId?: string,
 ): boolean {
-  return bookings.some(
-    (booking) => booking.status !== "cancelled" && booking.staffId === staffId && booking.date === date && booking.time === time,
-  );
+  const start = timeToMinutes(time);
+  const end = start + durationMinutes;
+  return bookings.some((booking) => {
+    if (booking.id === excludeBookingId || booking.status === "cancelled" || booking.staffId !== staffId || booking.date !== date) return false;
+    const bookingStart = timeToMinutes(booking.time);
+    const bookingEnd = bookingStart + booking.durationMinutes;
+    return start < bookingEnd && end > bookingStart;
+  });
 }
 
 export function createBooking(booking: BookingRecord): CreateBookingResult {
@@ -57,11 +81,27 @@ export function createBooking(booking: BookingRecord): CreateBookingResult {
   try {
     const currentBookings = loadBookings();
 
-    if (isSlotBooked(currentBookings, booking.staffId, booking.date, booking.time)) {
+    if (isSlotBooked(currentBookings, booking.staffId, booking.date, booking.time, booking.durationMinutes)) {
       return { ok: false, reason: "slot_taken" };
     }
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...currentBookings, booking]));
+    window.dispatchEvent(new Event(BOOKINGS_CHANGED_EVENT));
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "storage_error" };
+  }
+}
+
+export function updateBooking(booking: BookingRecord): CreateBookingResult {
+  if (typeof window === "undefined") return { ok: false, reason: "storage_error" };
+  try {
+    const currentBookings = loadBookings();
+    if (isSlotBooked(currentBookings, booking.staffId, booking.date, booking.time, booking.durationMinutes, booking.id)) {
+      return { ok: false, reason: "slot_taken" };
+    }
+    const nextBookings = currentBookings.map((item) => item.id === booking.id ? booking : item);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextBookings));
     window.dispatchEvent(new Event(BOOKINGS_CHANGED_EVENT));
     return { ok: true };
   } catch {

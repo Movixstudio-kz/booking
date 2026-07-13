@@ -1,1 +1,1 @@
-export { createBooking, deleteBooking, isSlotBooked, loadBookings, updateBookingStatus } from "./booking-storage";
+export { createBooking, deleteBooking, isSlotBooked, loadBookings, updateBooking, updateBookingStatus } from "./booking-storage";
