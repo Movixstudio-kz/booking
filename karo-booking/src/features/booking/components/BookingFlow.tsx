@@ -1,12 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
+import { useHydratedStorageState } from "@/hooks";
 import { Logo } from "@/components/ui/Logo";
 import { routes } from "@/config/routes";
-import { bookingServices, staffMembers, timeSlots } from "@/features/booking/data";
+import { timeSlots } from "@/features/booking/data";
 import { createBooking, isSlotBooked, loadBookings } from "@/features/booking/services";
 import type { BookingRecord, ServiceId } from "@/features/booking/types";
+import { defaultServices } from "@/features/services/data";
+import { loadServices as loadCrmServices } from "@/features/services/services";
+import type { ServiceItem } from "@/features/services/types";
+import { defaultStaff } from "@/features/staff/data";
+import { loadStaff } from "@/features/staff/services";
+import type { StaffItem } from "@/features/staff/types";
 import { BookingConfirmation } from "./BookingConfirmation";
 import { BookingProgress } from "./BookingProgress";
 import { BookingSummary } from "./BookingSummary";
@@ -43,15 +50,16 @@ export function BookingFlow() {
   const [clientName, setClientName] = useState("");
   const [contact, setContact] = useState("");
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
+  const [catalogServices] = useHydratedStorageState<ServiceItem[]>(defaultServices, loadCrmServices);
+  const [catalogStaff] = useHydratedStorageState<StaffItem[]>(defaultStaff, loadStaff);
   const [error, setError] = useState("");
   const [confirmedBooking, setConfirmedBooking] = useState<BookingRecord | null>(null);
 
-  const selectedService = bookingServices.find((service) => service.id === serviceId);
-  const selectedStaff = staffMembers.find((member) => member.id === staffId);
-  const availableStaff = useMemo(
-    () => staffMembers.filter((member) => serviceId && member.serviceIds.includes(serviceId)),
-    [serviceId],
-  );
+  const activeCatalogServices = catalogServices.filter((service) => service.isActive);
+  const activeCatalogStaff = catalogStaff.filter((member) => member.isActive);
+  const selectedService = activeCatalogServices.find((service) => service.id === serviceId);
+  const selectedStaff = activeCatalogStaff.find((member) => member.id === staffId);
+  const availableStaff = activeCatalogStaff.filter((member) => serviceId && member.serviceIds.includes(serviceId));
 
   const availableSlotCount = date && staffId
     ? timeSlots.filter((slot) => !isPastTime(date, slot) && !isSlotBooked(bookings, staffId, date, slot)).length
@@ -134,6 +142,7 @@ export function BookingFlow() {
       clientName: clientName.trim(),
       contact: contact.trim(),
       price: selectedService.price,
+      status: "new",
       createdAt: new Date().toISOString(),
     };
 
@@ -183,7 +192,7 @@ export function BookingFlow() {
             <BookingProgress currentStep={step} />
 
             <div className="mt-9">
-              {step === 1 && <div><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Выберите услугу</h2><p className="mt-2 text-sm text-[#718178]">Стоимость и длительность указаны заранее.</p><div className="mt-6 grid gap-3 sm:grid-cols-2">{bookingServices.map((service) => <button type="button" key={service.id} onClick={() => selectService(service.id)} aria-pressed={service.id === serviceId} className={`rounded-2xl border p-5 text-left transition ${service.id === serviceId ? "border-[#3dbf74] bg-[#e9faef] ring-2 ring-[#3ee58c]/20" : "border-[#dfe5da] hover:border-[#a9b8ac] hover:bg-[#fafcf8]"}`}><span className="font-semibold text-[#10231d]">{service.name}</span><span className="mt-5 flex items-end justify-between gap-3"><span className="text-sm text-[#718178]">{service.durationMinutes} минут</span><span className="font-semibold text-[#294739]">{formatPrice(service.price)}</span></span></button>)}</div></div>}
+              {step === 1 && <div><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Выберите услугу</h2><p className="mt-2 text-sm text-[#718178]">Стоимость и длительность указаны заранее.</p><div className="mt-6 grid gap-3 sm:grid-cols-2">{activeCatalogServices.map((service) => <button type="button" key={service.id} onClick={() => selectService(service.id)} aria-pressed={service.id === serviceId} className={`rounded-2xl border p-5 text-left transition ${service.id === serviceId ? "border-[#3dbf74] bg-[#e9faef] ring-2 ring-[#3ee58c]/20" : "border-[#dfe5da] hover:border-[#a9b8ac] hover:bg-[#fafcf8]"}`}><span className="font-semibold text-[#10231d]">{service.name}</span><span className="mt-5 flex items-end justify-between gap-3"><span className="text-sm text-[#718178]">{service.durationMinutes} минут</span><span className="font-semibold text-[#294739]">{formatPrice(service.price)}</span></span></button>)}</div></div>}
 
               {step === 2 && <div><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Выберите специалиста</h2><p className="mt-2 text-sm text-[#718178]">Показываем только сотрудников, которые выполняют выбранную услугу.</p><div className="mt-6 grid gap-3 sm:grid-cols-2">{availableStaff.map((member) => <button type="button" key={member.id} onClick={() => selectStaff(member.id)} aria-pressed={member.id === staffId} className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition ${member.id === staffId ? "border-[#3dbf74] bg-[#e9faef] ring-2 ring-[#3ee58c]/20" : "border-[#dfe5da] hover:border-[#a9b8ac]"}`}><span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#dff7e8] font-bold text-[#237347]">{member.name.slice(0, 1)}</span><span><span className="block font-semibold text-[#10231d]">{member.name}</span><span className="mt-1 block text-xs text-[#718178]">Доступна для записи</span></span></button>)}</div></div>}
 

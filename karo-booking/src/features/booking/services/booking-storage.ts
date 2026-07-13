@@ -1,8 +1,12 @@
-import type { BookingRecord, CreateBookingResult } from "@/features/booking/types";
+import type { BookingRecord, BookingStatus, CreateBookingResult } from "@/features/booking/types";
 
 const STORAGE_KEY = "karo-booking:appointments";
+export const BOOKINGS_CHANGED_EVENT = "karo-booking:appointments-changed";
+const statuses: BookingStatus[] = ["new", "confirmed", "in_progress", "completed", "cancelled"];
 
-function isBookingRecord(value: unknown): value is BookingRecord {
+type LegacyBookingRecord = Omit<BookingRecord, "status"> & { status?: BookingStatus };
+
+function isBookingRecord(value: unknown): value is LegacyBookingRecord {
   if (typeof value !== "object" || value === null) return false;
 
   const record = value as Record<string, unknown>;
@@ -17,6 +21,7 @@ function isBookingRecord(value: unknown): value is BookingRecord {
     typeof record.clientName === "string" &&
     typeof record.contact === "string" &&
     typeof record.price === "number" &&
+    (record.status === undefined || (typeof record.status === "string" && statuses.includes(record.status as BookingStatus))) &&
     typeof record.createdAt === "string"
   );
 }
@@ -29,7 +34,7 @@ export function loadBookings(): BookingRecord[] {
     if (!rawValue) return [];
 
     const parsedValue: unknown = JSON.parse(rawValue) as unknown;
-    return Array.isArray(parsedValue) ? parsedValue.filter(isBookingRecord) : [];
+    return Array.isArray(parsedValue) ? parsedValue.filter(isBookingRecord).map((booking) => ({ ...booking, status: booking.status ?? "new" })) : [];
   } catch {
     return [];
   }
@@ -42,7 +47,7 @@ export function isSlotBooked(
   time: string,
 ): boolean {
   return bookings.some(
-    (booking) => booking.staffId === staffId && booking.date === date && booking.time === time,
+    (booking) => booking.status !== "cancelled" && booking.staffId === staffId && booking.date === date && booking.time === time,
   );
 }
 
@@ -57,8 +62,31 @@ export function createBooking(booking: BookingRecord): CreateBookingResult {
     }
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...currentBookings, booking]));
+    window.dispatchEvent(new Event(BOOKINGS_CHANGED_EVENT));
     return { ok: true };
   } catch {
     return { ok: false, reason: "storage_error" };
+  }
+}
+
+export function updateBookingStatus(id: string, status: BookingStatus): boolean {
+  try {
+    const nextBookings = loadBookings().map((booking) => booking.id === id ? { ...booking, status } : booking);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextBookings));
+    window.dispatchEvent(new Event(BOOKINGS_CHANGED_EVENT));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function deleteBooking(id: string): boolean {
+  try {
+    const nextBookings = loadBookings().filter((booking) => booking.id !== id);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextBookings));
+    window.dispatchEvent(new Event(BOOKINGS_CHANGED_EVENT));
+    return true;
+  } catch {
+    return false;
   }
 }

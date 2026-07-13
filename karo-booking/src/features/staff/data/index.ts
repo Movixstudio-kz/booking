@@ -1,1 +1,1 @@
-export {};
+export { defaultStaff } from "./default-staff";

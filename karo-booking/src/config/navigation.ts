@@ -9,7 +9,7 @@ export const siteNavigation = [
 export const adminNavigation = [
   { label: "Dashboard", href: routes.admin, icon: "▦" },
   { label: "Календарь", href: routes.calendar, icon: "□" },
-  { label: "Записи", href: routes.booking, icon: "◷" },
+  { label: "Записи", href: routes.appointments, icon: "◷" },
   { label: "Клиенты", href: routes.clients, icon: "♙" },
   { label: "Сотрудники", href: routes.staff, icon: "♧" },
   { label: "Услуги", href: routes.services, icon: "◇" },

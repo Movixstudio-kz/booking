@@ -1,4 +1,4 @@
-export type ServiceId = "manicure" | "pedicure" | "haircut" | "coloring";
+export type ServiceId = string;
 
 export type BookingService = {
   id: ServiceId;
@@ -13,6 +13,8 @@ export type StaffMember = {
   serviceIds: ServiceId[];
 };
 
+export type BookingStatus = "new" | "confirmed" | "in_progress" | "completed" | "cancelled";
+
 export type BookingRecord = {
   id: string;
   serviceId: ServiceId;
@@ -24,6 +26,7 @@ export type BookingRecord = {
   clientName: string;
   contact: string;
   price: number;
+  status: BookingStatus;
   createdAt: string;
 };
 

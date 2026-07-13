@@ -2,6 +2,7 @@ export const routes = {
   home: "/",
   admin: "/admin",
   booking: "/booking",
+  appointments: "/appointments",
   calendar: "/calendar",
   clients: "/clients",
   staff: "/staff",

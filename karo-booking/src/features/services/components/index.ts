@@ -1,1 +1,1 @@
-export {};
+export { ServicesManager } from "./ServicesManager";

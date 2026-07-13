@@ -1,1 +1,1 @@
-export {};
+export { StaffManager } from "./StaffManager";

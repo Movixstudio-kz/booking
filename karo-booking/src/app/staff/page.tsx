@@ -1,5 +1,6 @@
-import { AppPlaceholder } from "@/components/ui/AppPlaceholder";
+import { AdminLayout } from "@/components/admin/AdminLayout";
+import { StaffManager } from "@/features/staff/components";
 
 export default function StaffPage() {
-  return <AppPlaceholder title="Команда" description="Управление специалистами, их рабочими часами и доступными услугами." />;
+  return <AdminLayout><StaffManager /></AdminLayout>;
 }
