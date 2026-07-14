@@ -1,2 +1,12 @@
-/** Infrastructure helpers and integrations live in this module. */
-export {};
+export {
+  canChangeAppointmentStatus,
+  canCreateAppointment,
+  canDeleteAppointments,
+  canEditAnySchedule,
+  canEditAppointment,
+  canEditStaffSchedule,
+  canManageServices,
+  canManageStaff,
+  canViewAppointment,
+  canViewStaffSchedule,
+} from "./permissions";

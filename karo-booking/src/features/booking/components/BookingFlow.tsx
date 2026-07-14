@@ -6,8 +6,10 @@ import { useHydratedStorageState } from "@/hooks";
 import { Logo } from "@/components/ui/Logo";
 import { routes } from "@/config/routes";
 import { timeSlots } from "@/features/booking/data";
-import { createBooking, isSlotBooked, loadBookings } from "@/features/booking/services";
+import { createBooking, loadBookings } from "@/features/booking/services";
 import type { BookingRecord, ServiceId } from "@/features/booking/types";
+import { useStaffSchedules } from "@/features/schedule/hooks";
+import { getScheduleAvailability } from "@/features/schedule/utils";
 import { defaultServices } from "@/features/services/data";
 import { loadServices as loadCrmServices } from "@/features/services/services";
 import type { ServiceItem } from "@/features/services/types";
@@ -54,6 +56,7 @@ export function BookingFlow() {
   const [catalogStaff] = useHydratedStorageState<StaffItem[]>(defaultStaff, loadStaff);
   const [error, setError] = useState("");
   const [confirmedBooking, setConfirmedBooking] = useState<BookingRecord | null>(null);
+  const { getSchedule } = useStaffSchedules();
 
   const activeCatalogServices = catalogServices.filter((service) => service.isActive);
   const activeCatalogStaff = catalogStaff.filter((member) => member.isActive);
@@ -61,8 +64,9 @@ export function BookingFlow() {
   const selectedStaff = activeCatalogStaff.find((member) => member.id === staffId);
   const availableStaff = activeCatalogStaff.filter((member) => serviceId && member.serviceIds.includes(serviceId));
 
-  const availableSlotCount = date && staffId
-    ? timeSlots.filter((slot) => !isPastTime(date, slot) && !isSlotBooked(bookings, staffId, date, slot, selectedService?.durationMinutes ?? 1)).length
+  const selectedSchedule = staffId ? getSchedule(staffId) : null;
+  const availableSlotCount = date && selectedSchedule
+    ? timeSlots.filter((slot) => getScheduleAvailability({ schedule: selectedSchedule, date, time: slot, durationMinutes: selectedService?.durationMinutes ?? 1, appointments: bookings }).available).length
     : timeSlots.length;
 
   function selectService(id: ServiceId) {
@@ -121,6 +125,22 @@ export function BookingFlow() {
       return;
     }
 
+    const latestBookings = loadBookings();
+    const scheduleAvailability = getScheduleAvailability({
+      schedule: getSchedule(selectedStaff.id),
+      date,
+      time,
+      durationMinutes: selectedService.durationMinutes,
+      appointments: latestBookings,
+    });
+    if (!scheduleAvailability.available) {
+      setBookings(latestBookings);
+      setTime("");
+      setStep(3);
+      setError(scheduleAvailability.reason === "appointment_overlap" ? "Это время уже заняли. Выберите, пожалуйста, другой свободный слот." : "Выбранное время недоступно по графику сотрудника. Выберите другой слот.");
+      return;
+    }
+
     if (clientName.trim().length < 2) {
       setError("Укажите имя клиента — минимум 2 символа.");
       return;
@@ -155,6 +175,11 @@ export function BookingFlow() {
         setTime("");
         setStep(3);
         setError("Это время уже заняли. Выберите, пожалуйста, другой свободный слот.");
+      } else if (result.reason === "schedule_unavailable") {
+        setBookings(loadBookings());
+        setTime("");
+        setStep(3);
+        setError("Выбранное время недоступно по графику сотрудника. Выберите другой слот.");
       } else {
         setError("Не удалось сохранить запись на устройстве. Проверьте настройки браузера и попробуйте снова.");
       }
@@ -198,7 +223,7 @@ export function BookingFlow() {
 
               {step === 2 && <div><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Выберите специалиста</h2><p className="mt-2 text-sm text-[#718178]">Показываем только сотрудников, которые выполняют выбранную услугу.</p><div className="mt-6 grid gap-3 sm:grid-cols-2">{availableStaff.map((member) => <button type="button" key={member.id} onClick={() => selectStaff(member.id)} aria-pressed={member.id === staffId} className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition ${member.id === staffId ? "border-[#3dbf74] bg-[#e9faef] ring-2 ring-[#3ee58c]/20" : "border-[#dfe5da] hover:border-[#a9b8ac]"}`}><span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#dff7e8] font-bold text-[#237347]">{member.name.slice(0, 1)}</span><span><span className="block font-semibold text-[#10231d]">{member.name}</span><span className="mt-1 block text-xs text-[#718178]">Доступна для записи</span></span></button>)}</div></div>}
 
-              {step === 3 && <div><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Дата и свободное время</h2><p className="mt-2 text-sm text-[#718178]">Выберите день, затем подходящий интервал.</p><label className="mt-6 block max-w-sm"><span className="mb-2 block text-sm font-semibold text-[#385145]">Дата</span><input type="date" value={date} min={getToday()} onChange={(event) => selectDate(event.target.value)} className="w-full rounded-2xl border border-[#d5ddd5] bg-white px-4 py-3 text-[#10231d] outline-none transition focus:border-[#47b875] focus:ring-4 focus:ring-[#3ee58c]/10" /></label>{date && <div className="mt-7"><div className="flex items-center justify-between gap-4"><p className="text-sm font-semibold text-[#385145]">Свободное время</p><span className="text-xs text-[#7e8e85]">Доступно: {availableSlotCount}</span></div>{availableSlotCount === 0 ? <div className="mt-3 rounded-2xl border border-[#f0d5aa] bg-[#fff8e9] p-4 text-sm leading-6 text-[#7b5a25]">На эту дату свободных окон нет. Пожалуйста, выберите другую дату.</div> : <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{timeSlots.map((slot) => { const booked = isSlotBooked(bookings, staffId, date, slot, selectedService?.durationMinutes ?? 1); const past = isPastTime(date, slot); const disabled = booked || past; return <button type="button" key={slot} disabled={disabled} onClick={() => { setTime(slot); setError(""); }} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${time === slot ? "border-[#3dbf74] bg-[#e5faed] text-[#17633c] ring-2 ring-[#3ee58c]/20" : disabled ? "cursor-not-allowed border-[#e5e8e3] bg-[#f3f4f1] text-[#a6afa9] line-through" : "border-[#d5ddd5] text-[#385145] hover:border-[#7fad8d] hover:bg-[#f5faf5]"}`}>{slot}{disabled && <span className="mt-0.5 block text-[9px] font-medium no-underline">{booked ? "Занято" : "Прошло"}</span>}</button>; })}</div>}</div>}</div>}
+              {step === 3 && <div><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Дата и свободное время</h2><p className="mt-2 text-sm text-[#718178]">Выберите день, затем подходящий интервал.</p><label className="mt-6 block max-w-sm"><span className="mb-2 block text-sm font-semibold text-[#385145]">Дата</span><input type="date" value={date} min={getToday()} onChange={(event) => selectDate(event.target.value)} className="w-full rounded-2xl border border-[#d5ddd5] bg-white px-4 py-3 text-[#10231d] outline-none transition focus:border-[#47b875] focus:ring-4 focus:ring-[#3ee58c]/10" /></label>{date && <div className="mt-7"><div className="flex items-center justify-between gap-4"><p className="text-sm font-semibold text-[#385145]">Свободное время</p><span className="text-xs text-[#7e8e85]">Доступно: {availableSlotCount}</span></div>{availableSlotCount === 0 ? <div className="mt-3 rounded-2xl border border-[#f0d5aa] bg-[#fff8e9] p-4 text-sm leading-6 text-[#7b5a25]">На эту дату свободных окон нет. Пожалуйста, выберите другую дату.</div> : <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{timeSlots.map((slot) => { const availability = selectedSchedule ? getScheduleAvailability({ schedule: selectedSchedule, date, time: slot, durationMinutes: selectedService?.durationMinutes ?? 1, appointments: bookings }) : { available: false, reason: "outside_working_hours" as const }; const disabled = !availability.available; return <button type="button" key={slot} disabled={disabled} onClick={() => { setTime(slot); setError(""); }} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${time === slot ? "border-[#3dbf74] bg-[#e5faed] text-[#17633c] ring-2 ring-[#3ee58c]/20" : disabled ? "cursor-not-allowed border-[#e5e8e3] bg-[#f3f4f1] text-[#a6afa9] line-through" : "border-[#d5ddd5] text-[#385145] hover:border-[#7fad8d] hover:bg-[#f5faf5]"}`}>{slot}{disabled && <span className="mt-0.5 block text-[9px] font-medium no-underline">{availability.reason === "appointment_overlap" ? "Занято" : availability.reason === "past" ? "Прошло" : "Недоступно"}</span>}</button>; })}</div>}</div>}</div>}
 
               {step === 4 && <form id="booking-contact-form" onSubmit={submitBooking}><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Ваши контакты</h2><p className="mt-2 text-sm text-[#718178]">Укажите данные, чтобы завершить запись.</p><div className="mt-6 grid gap-5"><label><span className="mb-2 block text-sm font-semibold text-[#385145]">Имя клиента</span><input value={clientName} onChange={(event) => setClientName(event.target.value)} autoComplete="name" placeholder="Например, Алина" className="w-full rounded-2xl border border-[#d5ddd5] px-4 py-3 outline-none transition placeholder:text-[#a1aca5] focus:border-[#47b875] focus:ring-4 focus:ring-[#3ee58c]/10" /></label><label><span className="mb-2 block text-sm font-semibold text-[#385145]">Телефон или WhatsApp</span><input type="tel" value={contact} onChange={(event) => setContact(event.target.value)} autoComplete="tel" placeholder="+7 700 000 00 00" className="w-full rounded-2xl border border-[#d5ddd5] px-4 py-3 outline-none transition placeholder:text-[#a1aca5] focus:border-[#47b875] focus:ring-4 focus:ring-[#3ee58c]/10" /></label></div></form>}
             </div>

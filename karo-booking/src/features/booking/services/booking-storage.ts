@@ -1,4 +1,6 @@
 import type { BookingRecord, BookingStatus, CreateBookingResult } from "@/features/booking/types";
+import { loadStaffSchedule } from "@/features/schedule/services";
+import { getScheduleAvailability } from "@/features/schedule/utils";
 import { defaultServices } from "@/features/services/data";
 
 const STORAGE_KEY = "karo-booking:appointments";
@@ -80,6 +82,17 @@ export function createBooking(booking: BookingRecord): CreateBookingResult {
 
   try {
     const currentBookings = loadBookings();
+    const availability = getScheduleAvailability({
+      schedule: loadStaffSchedule(booking.staffId),
+      date: booking.date,
+      time: booking.time,
+      durationMinutes: booking.durationMinutes,
+      appointments: currentBookings,
+    });
+
+    if (!availability.available) {
+      return { ok: false, reason: availability.reason === "appointment_overlap" ? "slot_taken" : "schedule_unavailable" };
+    }
 
     if (isSlotBooked(currentBookings, booking.staffId, booking.date, booking.time, booking.durationMinutes)) {
       return { ok: false, reason: "slot_taken" };
@@ -97,6 +110,21 @@ export function updateBooking(booking: BookingRecord): CreateBookingResult {
   if (typeof window === "undefined") return { ok: false, reason: "storage_error" };
   try {
     const currentBookings = loadBookings();
+    const previousBooking = currentBookings.find((item) => item.id === booking.id);
+    const scheduleChanged = !previousBooking || previousBooking.staffId !== booking.staffId || previousBooking.date !== booking.date || previousBooking.time !== booking.time || previousBooking.durationMinutes !== booking.durationMinutes;
+    if (scheduleChanged) {
+      const availability = getScheduleAvailability({
+        schedule: loadStaffSchedule(booking.staffId),
+        date: booking.date,
+        time: booking.time,
+        durationMinutes: booking.durationMinutes,
+        appointments: currentBookings,
+        excludeAppointmentId: booking.id,
+      });
+      if (!availability.available) {
+        return { ok: false, reason: availability.reason === "appointment_overlap" ? "slot_taken" : "schedule_unavailable" };
+      }
+    }
     if (isSlotBooked(currentBookings, booking.staffId, booking.date, booking.time, booking.durationMinutes, booking.id)) {
       return { ok: false, reason: "slot_taken" };
     }

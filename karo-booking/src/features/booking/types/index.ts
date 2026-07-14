@@ -34,4 +34,4 @@ export type BookingRecord = {
 
 export type CreateBookingResult =
   | { ok: true }
-  | { ok: false; reason: "slot_taken" | "storage_error" };
+  | { ok: false; reason: "slot_taken" | "schedule_unavailable" | "permission_denied" | "storage_error" };

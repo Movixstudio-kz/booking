@@ -1,2 +1,1 @@
-/** Data-access services will be introduced after Supabase integration. */
-export {};
+export { loadCurrentUser, saveCurrentUser } from "./current-user-storage";
