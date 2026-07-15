@@ -30,7 +30,7 @@ export default function HomePage() {
               <div className="space-y-9 pt-3 text-xs text-[#92a097]"><p>10:00</p><p>11:00</p><p>12:00</p><p>13:00</p></div>
               <div className="relative h-72 rounded-2xl bg-[#f5f7f2] p-3">
                 <div className="rounded-xl bg-[#d8f9e4] p-3 text-xs text-[#286342]"><p className="font-bold">10:00 · Алина</p><p className="mt-1 text-[#57816a]">Маникюр · Мария</p></div>
-                <div className="mt-5 rounded-xl bg-[#e8ece7] p-3 text-xs text-[#476056]"><p className="font-bold">11:30 · Дмитрий</p><p className="mt-1 text-[#728078]">Стрижка · Алексей</p></div>
+                <div className="mt-5 rounded-xl bg-[#e8ece7] p-3 text-xs text-[#476056]"><p className="font-bold">11:30 · Жанна</p><p className="mt-1 text-[#728078]">Стрижка · Дана</p></div>
                 <div className="mt-5 rounded-xl border border-dashed border-[#b7c1b9] p-3 text-xs text-[#789087]">Свободное время</div>
               </div>
             </div>
