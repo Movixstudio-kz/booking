@@ -27,6 +27,8 @@ export type BookingRecord = {
   contact: string;
   price: number;
   durationMinutes: number;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
   comment: string;
   status: BookingStatus;
   createdAt: string;

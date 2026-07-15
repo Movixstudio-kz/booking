@@ -1,1 +1,1 @@
-export {};
+export { useServicesRepository } from "./useServicesRepository";

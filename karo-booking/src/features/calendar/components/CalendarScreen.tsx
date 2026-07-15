@@ -21,7 +21,7 @@ export function CalendarScreen() {
   const [dialogMode, setDialogMode] = useState<CalendarDialogMode | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<BookingRecord | null>(null);
   const [message, setMessage] = useState("");
-  const { currentUser, appointments, activeStaff, activeServices, schedules, saveAppointment, changeStatus, removeAppointment } = useCalendarData();
+  const { currentUser, appointments, activeStaff, activeServices, schedules, repositoryError, saveAppointment, changeStatus, removeAppointment } = useCalendarData();
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setCursor(new Date()));
@@ -63,23 +63,23 @@ export function CalendarScreen() {
     setDialogMode("edit");
   }
 
-  function deleteSelected(id: string) {
+  async function deleteSelected(id: string) {
     if (!canDeleteAppointments(currentUser)) {
       setMessage(deniedMessage);
       return;
     }
-    if (removeAppointment(id)) {
+    if (await removeAppointment(id)) {
       setMessage("");
       closeDialog();
     }
   }
 
-  function updateSelectedStatus(appointment: BookingRecord, status: BookingStatus): boolean {
+  async function updateSelectedStatus(appointment: BookingRecord, status: BookingStatus): Promise<boolean> {
     if (!canChangeAppointmentStatus(currentUser, appointment)) {
       setMessage(deniedMessage);
       return false;
     }
-    const result = changeStatus(appointment, status);
+    const result = await changeStatus(appointment, status);
     if (result) {
       setSelectedAppointment({ ...appointment, status });
       setMessage("");
@@ -100,7 +100,7 @@ export function CalendarScreen() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#718178]">Управляйте загрузкой сотрудников, записями и рабочими исключениями в одном календаре.</p>
         </div>
 
-        {message && <p role="alert" className="mb-4 rounded-xl bg-[#fff1ef] px-4 py-3 text-sm text-[#9a4036]">{message}</p>}
+        {(message || repositoryError) && <p role="alert" className="mb-4 rounded-xl bg-[#fff1ef] px-4 py-3 text-sm text-[#9a4036]">{message || repositoryError}</p>}
 
         <CalendarToolbar
           cursor={cursor}

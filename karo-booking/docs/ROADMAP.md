@@ -8,6 +8,7 @@
 - календарь день/неделя/месяц;
 - локальная ролевая модель admin/staff/viewer;
 - рабочие графики, перерывы, выходные, отпуск и дополнительные интервалы;
+- единый Repository Layer с LocalStorage-реализациями;
 - feature-based архитектура и дизайн-система.
 
 ## Этап 1 — Database design
@@ -53,12 +54,14 @@
 
 ## Этап 6 — Migration from localStorage
 
-- определить версию localStorage-формата;
+- [x] определить версию localStorage-формата;
+- [x] отделить UI и feature-логику от прямого доступа к localStorage;
+- [x] зафиксировать стабильные repository contracts и provider;
 - реализовать валидируемый одноразовый импорт;
 - сопоставить локальные staff/service/appointment IDs с UUID;
 - нормализовать телефоны, timezone и деньги;
 - сформировать отчёт об ошибках и дублях;
-- после подтверждения переключить UI на repository/service слой Supabase.
+- после подтверждения заменить LocalStorageRepository на SupabaseRepository через provider.
 
 ## Этап 7 — Production testing
 

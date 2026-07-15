@@ -7,3 +7,8 @@ export type StaffItem = {
   isActive: boolean;
   serviceIds: string[];
 };
+
+export type PublicStaffItem = Pick<
+  StaffItem,
+  "id" | "name" | "position" | "calendarColor" | "isActive" | "serviceIds"
+>;

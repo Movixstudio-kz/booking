@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useStaffSchedules } from "@/features/schedule/hooks";
+import { useCurrentUserStaffSchedules } from "@/features/schedule/hooks";
 import type { StaffSchedule } from "@/features/schedule/types";
 import { ScheduleExceptionsEditor } from "./ScheduleExceptionsEditor";
 import { WeeklyScheduleEditor } from "./WeeklyScheduleEditor";
@@ -24,7 +24,7 @@ export type ScheduleEditorProps = {
 export function ScheduleEditor({ staff, canEditStaffSchedule, lockedStaffId, onPermissionDenied }: ScheduleEditorProps) {
   const [internalStaffId, setInternalStaffId] = useState(lockedStaffId ?? staff[0]?.id ?? "");
   const [message, setMessage] = useState("");
-  const { getSchedule, updateSchedule } = useStaffSchedules();
+  const { getSchedule, updateSchedule } = useCurrentUserStaffSchedules();
   const fallbackStaffId = staff[0]?.id ?? "";
   const selectedStaffId = lockedStaffId ?? (staff.some((member) => member.id === internalStaffId) ? internalStaffId : fallbackStaffId);
   const selectedStaff = staff.find((member) => member.id === selectedStaffId);
@@ -49,13 +49,13 @@ export function ScheduleEditor({ staff, canEditStaffSchedule, lockedStaffId, onP
     setMessage("");
   }
 
-  function applySchedule(nextSchedule: StaffSchedule) {
+  async function applySchedule(nextSchedule: StaffSchedule) {
     if (!selectedStaffId || nextSchedule.staffId !== selectedStaffId || !canEditStaffSchedule(selectedStaffId)) {
       denyPermission();
       return;
     }
 
-    if (!updateSchedule(nextSchedule)) {
+    if (!await updateSchedule(nextSchedule)) {
       setMessage("Не удалось сохранить график. Проверьте даты и интервалы времени.");
       return;
     }

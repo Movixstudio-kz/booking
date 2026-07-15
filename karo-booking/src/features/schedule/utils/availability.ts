@@ -6,8 +6,6 @@ import type {
 } from "@/features/schedule/types";
 import {
   getWeekday,
-  intervalContains,
-  intervalsOverlap,
   isValidDateKey,
   isValidTime,
   timeToMinutes,
@@ -18,6 +16,8 @@ export type ScheduleAvailabilityInput = {
   date: string;
   time: string;
   durationMinutes: number;
+  bufferBeforeMinutes?: number;
+  bufferAfterMinutes?: number;
   appointments?: ScheduledAppointment[];
   excludeAppointmentId?: string;
   now?: Date;
@@ -47,35 +47,45 @@ export function getScheduleAvailability({
   date,
   time,
   durationMinutes,
+  bufferBeforeMinutes = 0,
+  bufferAfterMinutes = 0,
   appointments = [],
   excludeAppointmentId,
   now = new Date(),
 }: ScheduleAvailabilityInput): ScheduleAvailability {
-  if (!isValidDateKey(date) || !isValidTime(time) || !Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+  if (
+    !isValidDateKey(date) ||
+    !isValidTime(time) ||
+    !Number.isFinite(durationMinutes) ||
+    durationMinutes <= 0 ||
+    !Number.isFinite(bufferBeforeMinutes) ||
+    bufferBeforeMinutes < 0 ||
+    !Number.isFinite(bufferAfterMinutes) ||
+    bufferAfterMinutes < 0
+  ) {
     return { available: false, reason: "outside_working_hours" };
   }
 
-  const requestedInterval = {
-    start: time,
-    end: minutesToUnboundedTime(timeToMinutes(time) + durationMinutes),
-  };
+  const requestedStartMinutes = timeToMinutes(time) - bufferBeforeMinutes;
+  const requestedEndMinutes = timeToMinutes(time) + durationMinutes + bufferAfterMinutes;
   const requestedDateTime = new Date(`${date}T${time}:00`);
 
-  if (requestedDateTime.getTime() < now.getTime()) return { available: false, reason: "past" };
+  const availabilityStart = requestedDateTime.getTime() - bufferBeforeMinutes * 60_000;
+  if (availabilityStart < now.getTime()) return { available: false, reason: "past" };
   if (isDateInVacation(schedule, date)) return { available: false, reason: "vacation" };
 
   const extraIntervals = schedule.extraWorkingIntervals.filter((interval) => interval.date === date);
-  const isInsideExtraInterval = extraIntervals.some((interval) => intervalContains(interval, requestedInterval));
+  const isInsideExtraInterval = extraIntervals.some((interval) => intervalContainsMinutes(interval, requestedStartMinutes, requestedEndMinutes));
   if (schedule.daysOff.includes(date) && !isInsideExtraInterval) return { available: false, reason: "day_off" };
 
   const workingIntervals = getWorkingIntervalsForDate(schedule, date);
-  if (!workingIntervals.some((interval) => intervalContains(interval, requestedInterval))) {
+  if (!workingIntervals.some((interval) => intervalContainsMinutes(interval, requestedStartMinutes, requestedEndMinutes))) {
     return { available: false, reason: "outside_working_hours" };
   }
 
   const intersectsBreak = schedule.breaks
     .filter((item) => item.date === date)
-    .some((item) => intervalsOverlap(item, requestedInterval));
+    .some((item) => intervalOverlapsMinutes(item, requestedStartMinutes, requestedEndMinutes));
   if (intersectsBreak) return { available: false, reason: "break" };
 
   const intersectsAppointment = appointments.some((appointment) => {
@@ -86,11 +96,13 @@ export function getScheduleAvailability({
       appointment.status === "cancelled"
     ) return false;
 
-    const appointmentInterval = {
-      start: appointment.time,
-      end: minutesToUnboundedTime(timeToMinutes(appointment.time) + appointment.durationMinutes),
-    };
-    return intervalsOverlap(appointmentInterval, requestedInterval);
+    const appointmentStartMinutes =
+      timeToMinutes(appointment.time) - (appointment.bufferBeforeMinutes ?? 0);
+    const appointmentEndMinutes =
+      timeToMinutes(appointment.time) +
+      appointment.durationMinutes +
+      (appointment.bufferAfterMinutes ?? 0);
+    return requestedStartMinutes < appointmentEndMinutes && requestedEndMinutes > appointmentStartMinutes;
   });
 
   return intersectsAppointment
@@ -109,12 +121,25 @@ export function getAvailableScheduleSlots(
   durationMinutes: number,
   appointments: ScheduledAppointment[] = [],
   now: Date = new Date(),
+  bufferBeforeMinutes = 0,
+  bufferAfterMinutes = 0,
 ): string[] {
-  return slots.filter((time) => isScheduleSlotAvailable({ schedule, date, time, durationMinutes, appointments, now }));
+  return slots.filter((time) => isScheduleSlotAvailable({
+    schedule,
+    date,
+    time,
+    durationMinutes,
+    bufferBeforeMinutes,
+    bufferAfterMinutes,
+    appointments,
+    now,
+  }));
 }
 
-function minutesToUnboundedTime(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+function intervalContainsMinutes(interval: TimeInterval, startMinutes: number, endMinutes: number): boolean {
+  return timeToMinutes(interval.start) <= startMinutes && timeToMinutes(interval.end) >= endMinutes;
+}
+
+function intervalOverlapsMinutes(interval: TimeInterval, startMinutes: number, endMinutes: number): boolean {
+  return timeToMinutes(interval.start) < endMinutes && timeToMinutes(interval.end) > startMinutes;
 }

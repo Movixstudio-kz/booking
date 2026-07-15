@@ -5,8 +5,11 @@ export {
   canEditAnySchedule,
   canEditAppointment,
   canEditStaffSchedule,
+  canManageClients,
   canManageServices,
   canManageStaff,
   canViewAppointment,
+  canViewClients,
+  canViewStaffProfile,
   canViewStaffSchedule,
 } from "./permissions";

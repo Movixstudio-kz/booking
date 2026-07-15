@@ -1,21 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
-import { useHydratedStorageState } from "@/hooks";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Logo } from "@/components/ui/Logo";
 import { routes } from "@/config/routes";
 import { timeSlots } from "@/features/booking/data";
-import { createBooking, loadBookings } from "@/features/booking/services";
+import {
+  createBooking,
+  loadPublicAvailableSlots,
+  loadPublicServices,
+  loadPublicStaff,
+  subscribeToPublicBookingData,
+} from "@/features/booking/services";
 import type { BookingRecord, ServiceId } from "@/features/booking/types";
-import { useStaffSchedules } from "@/features/schedule/hooks";
-import { getScheduleAvailability } from "@/features/schedule/utils";
 import { defaultServices } from "@/features/services/data";
-import { loadServices as loadCrmServices } from "@/features/services/services";
 import type { ServiceItem } from "@/features/services/types";
 import { defaultStaff } from "@/features/staff/data";
-import { loadStaff } from "@/features/staff/services";
-import type { StaffItem } from "@/features/staff/types";
+import type { PublicStaffItem } from "@/features/staff/types";
 import { BookingConfirmation } from "./BookingConfirmation";
 import { BookingProgress } from "./BookingProgress";
 import { BookingSummary } from "./BookingSummary";
@@ -51,23 +52,89 @@ export function BookingFlow() {
   const [time, setTime] = useState("");
   const [clientName, setClientName] = useState("");
   const [contact, setContact] = useState("");
-  const [bookings, setBookings] = useState<BookingRecord[]>([]);
-  const [catalogServices] = useHydratedStorageState<ServiceItem[]>(defaultServices, loadCrmServices);
-  const [catalogStaff] = useHydratedStorageState<StaffItem[]>(defaultStaff, loadStaff);
+  const [availableSlots, setAvailableSlots] = useState<string[]>([...timeSlots]);
+  const [catalogServices, setCatalogServices] = useState<ServiceItem[]>(defaultServices);
+  const [catalogStaff, setCatalogStaff] = useState<PublicStaffItem[]>(defaultStaff);
   const [error, setError] = useState("");
   const [confirmedBooking, setConfirmedBooking] = useState<BookingRecord | null>(null);
-  const { getSchedule } = useStaffSchedules();
 
   const activeCatalogServices = catalogServices.filter((service) => service.isActive);
   const activeCatalogStaff = catalogStaff.filter((member) => member.isActive);
   const selectedService = activeCatalogServices.find((service) => service.id === serviceId);
+  const selectedServiceDuration = selectedService?.durationMinutes;
+  const selectedBufferBefore = selectedService?.bufferBeforeMinutes ?? 0;
+  const selectedBufferAfter = selectedService?.bufferAfterMinutes ?? 0;
   const selectedStaff = activeCatalogStaff.find((member) => member.id === staffId);
   const availableStaff = activeCatalogStaff.filter((member) => serviceId && member.serviceIds.includes(serviceId));
 
-  const selectedSchedule = staffId ? getSchedule(staffId) : null;
-  const availableSlotCount = date && selectedSchedule
-    ? timeSlots.filter((slot) => getScheduleAvailability({ schedule: selectedSchedule, date, time: slot, durationMinutes: selectedService?.durationMinutes ?? 1, appointments: bookings }).available).length
-    : timeSlots.length;
+  const availableSlotCount = date ? availableSlots.length : timeSlots.length;
+
+  const refreshRepositoryData = useCallback(async () => {
+    const [servicesResult, staffResult] = await Promise.all([
+      loadPublicServices(),
+      loadPublicStaff(),
+    ]);
+    if (servicesResult.ok) setCatalogServices(servicesResult.data);
+    if (staffResult.ok) setCatalogStaff(staffResult.data);
+
+    if (!servicesResult.ok) setError(servicesResult.error.message);
+    else if (!staffResult.ok) setError(staffResult.error.message);
+  }, []);
+
+  async function refreshAvailableSlots() {
+    if (!staffId || !date || !selectedServiceDuration) {
+      setAvailableSlots([...timeSlots]);
+      return;
+    }
+    const result = await loadPublicAvailableSlots({
+      staffId,
+      date,
+      slots: timeSlots,
+      durationMinutes: selectedServiceDuration,
+      bufferBeforeMinutes: selectedBufferBefore,
+      bufferAfterMinutes: selectedBufferAfter,
+    });
+    if (result.ok) {
+      setAvailableSlots(result.data);
+    } else {
+      setAvailableSlots([]);
+      setError(result.error.message);
+    }
+  }
+
+  useEffect(() => {
+    let isActive = true;
+    const refresh = () => {
+      void refreshRepositoryData();
+      void (async () => {
+        if (!staffId || !date || !selectedServiceDuration) {
+          if (isActive) setAvailableSlots([...timeSlots]);
+          return;
+        }
+        const result = await loadPublicAvailableSlots({
+          staffId,
+          date,
+          slots: timeSlots,
+          durationMinutes: selectedServiceDuration,
+          bufferBeforeMinutes: selectedBufferBefore,
+          bufferAfterMinutes: selectedBufferAfter,
+        });
+        if (!isActive) return;
+        if (result.ok) setAvailableSlots(result.data);
+        else {
+          setAvailableSlots([]);
+          setError(result.error.message);
+        }
+      })();
+    };
+    const frameId = window.requestAnimationFrame(refresh);
+    const unsubscribe = subscribeToPublicBookingData(refresh);
+    return () => {
+      isActive = false;
+      window.cancelAnimationFrame(frameId);
+      unsubscribe();
+    };
+  }, [date, refreshRepositoryData, selectedBufferAfter, selectedBufferBefore, selectedServiceDuration, staffId]);
 
   function selectService(id: ServiceId) {
     setServiceId(id);
@@ -81,7 +148,6 @@ export function BookingFlow() {
     setStaffId(id);
     setDate("");
     setTime("");
-    setBookings(loadBookings());
     setError("");
   }
 
@@ -93,7 +159,6 @@ export function BookingFlow() {
       return;
     }
 
-    setBookings(loadBookings());
     setDate(nextDate);
     setTime("");
     setError("");
@@ -109,7 +174,7 @@ export function BookingFlow() {
     setStep((currentStep) => Math.max(1, currentStep - 1));
   }
 
-  function submitBooking(event: FormEvent<HTMLFormElement>) {
+  async function submitBooking(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
@@ -125,19 +190,23 @@ export function BookingFlow() {
       return;
     }
 
-    const latestBookings = loadBookings();
-    const scheduleAvailability = getScheduleAvailability({
-      schedule: getSchedule(selectedStaff.id),
+    const latestSlots = await loadPublicAvailableSlots({
+      staffId: selectedStaff.id,
       date,
-      time,
+      slots: [time],
       durationMinutes: selectedService.durationMinutes,
-      appointments: latestBookings,
+      bufferBeforeMinutes: selectedService.bufferBeforeMinutes,
+      bufferAfterMinutes: selectedService.bufferAfterMinutes,
     });
-    if (!scheduleAvailability.available) {
-      setBookings(latestBookings);
+    if (!latestSlots.ok) {
+      setError(latestSlots.error.message);
+      return;
+    }
+    if (!latestSlots.data.includes(time)) {
+      setAvailableSlots((current) => current.filter((slot) => slot !== time));
       setTime("");
       setStep(3);
-      setError(scheduleAvailability.reason === "appointment_overlap" ? "Это время уже заняли. Выберите, пожалуйста, другой свободный слот." : "Выбранное время недоступно по графику сотрудника. Выберите другой слот.");
+      setError("У сотрудника уже есть запись на это время.");
       return;
     }
 
@@ -163,20 +232,22 @@ export function BookingFlow() {
       contact: contact.trim(),
       price: selectedService.price,
       durationMinutes: selectedService.durationMinutes,
+      bufferBeforeMinutes: selectedService.bufferBeforeMinutes,
+      bufferAfterMinutes: selectedService.bufferAfterMinutes,
       comment: "",
       status: "new",
       createdAt: new Date().toISOString(),
     };
 
-    const result = createBooking(booking);
+    const result = await createBooking(booking);
     if (!result.ok) {
       if (result.reason === "slot_taken") {
-        setBookings(loadBookings());
+        await refreshAvailableSlots();
         setTime("");
         setStep(3);
-        setError("Это время уже заняли. Выберите, пожалуйста, другой свободный слот.");
+        setError("У сотрудника уже есть запись на это время.");
       } else if (result.reason === "schedule_unavailable") {
-        setBookings(loadBookings());
+        await refreshAvailableSlots();
         setTime("");
         setStep(3);
         setError("Выбранное время недоступно по графику сотрудника. Выберите другой слот.");
@@ -186,7 +257,6 @@ export function BookingFlow() {
       return;
     }
 
-    setBookings((currentBookings) => [...currentBookings, booking]);
     setConfirmedBooking(booking);
   }
 
@@ -198,7 +268,7 @@ export function BookingFlow() {
     setTime("");
     setClientName("");
     setContact("");
-    setBookings(loadBookings());
+    setAvailableSlots([...timeSlots]);
     setError("");
     setConfirmedBooking(null);
   }
@@ -223,7 +293,7 @@ export function BookingFlow() {
 
               {step === 2 && <div><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Выберите специалиста</h2><p className="mt-2 text-sm text-[#718178]">Показываем только сотрудников, которые выполняют выбранную услугу.</p><div className="mt-6 grid gap-3 sm:grid-cols-2">{availableStaff.map((member) => <button type="button" key={member.id} onClick={() => selectStaff(member.id)} aria-pressed={member.id === staffId} className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition ${member.id === staffId ? "border-[#3dbf74] bg-[#e9faef] ring-2 ring-[#3ee58c]/20" : "border-[#dfe5da] hover:border-[#a9b8ac]"}`}><span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#dff7e8] font-bold text-[#237347]">{member.name.slice(0, 1)}</span><span><span className="block font-semibold text-[#10231d]">{member.name}</span><span className="mt-1 block text-xs text-[#718178]">Доступна для записи</span></span></button>)}</div></div>}
 
-              {step === 3 && <div><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Дата и свободное время</h2><p className="mt-2 text-sm text-[#718178]">Выберите день, затем подходящий интервал.</p><label className="mt-6 block max-w-sm"><span className="mb-2 block text-sm font-semibold text-[#385145]">Дата</span><input type="date" value={date} min={getToday()} onChange={(event) => selectDate(event.target.value)} className="w-full rounded-2xl border border-[#d5ddd5] bg-white px-4 py-3 text-[#10231d] outline-none transition focus:border-[#47b875] focus:ring-4 focus:ring-[#3ee58c]/10" /></label>{date && <div className="mt-7"><div className="flex items-center justify-between gap-4"><p className="text-sm font-semibold text-[#385145]">Свободное время</p><span className="text-xs text-[#7e8e85]">Доступно: {availableSlotCount}</span></div>{availableSlotCount === 0 ? <div className="mt-3 rounded-2xl border border-[#f0d5aa] bg-[#fff8e9] p-4 text-sm leading-6 text-[#7b5a25]">На эту дату свободных окон нет. Пожалуйста, выберите другую дату.</div> : <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{timeSlots.map((slot) => { const availability = selectedSchedule ? getScheduleAvailability({ schedule: selectedSchedule, date, time: slot, durationMinutes: selectedService?.durationMinutes ?? 1, appointments: bookings }) : { available: false, reason: "outside_working_hours" as const }; const disabled = !availability.available; return <button type="button" key={slot} disabled={disabled} onClick={() => { setTime(slot); setError(""); }} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${time === slot ? "border-[#3dbf74] bg-[#e5faed] text-[#17633c] ring-2 ring-[#3ee58c]/20" : disabled ? "cursor-not-allowed border-[#e5e8e3] bg-[#f3f4f1] text-[#a6afa9] line-through" : "border-[#d5ddd5] text-[#385145] hover:border-[#7fad8d] hover:bg-[#f5faf5]"}`}>{slot}{disabled && <span className="mt-0.5 block text-[9px] font-medium no-underline">{availability.reason === "appointment_overlap" ? "Занято" : availability.reason === "past" ? "Прошло" : "Недоступно"}</span>}</button>; })}</div>}</div>}</div>}
+              {step === 3 && <div><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Дата и свободное время</h2><p className="mt-2 text-sm text-[#718178]">Выберите день, затем подходящий интервал.</p><label className="mt-6 block max-w-sm"><span className="mb-2 block text-sm font-semibold text-[#385145]">Дата</span><input type="date" value={date} min={getToday()} onChange={(event) => selectDate(event.target.value)} className="w-full rounded-2xl border border-[#d5ddd5] bg-white px-4 py-3 text-[#10231d] outline-none transition focus:border-[#47b875] focus:ring-4 focus:ring-[#3ee58c]/10" /></label>{date && <div className="mt-7"><div className="flex items-center justify-between gap-4"><p className="text-sm font-semibold text-[#385145]">Свободное время</p><span className="text-xs text-[#7e8e85]">Доступно: {availableSlotCount}</span></div>{availableSlotCount === 0 ? <div className="mt-3 rounded-2xl border border-[#f0d5aa] bg-[#fff8e9] p-4 text-sm leading-6 text-[#7b5a25]">На эту дату свободных окон нет. Пожалуйста, выберите другую дату.</div> : <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{timeSlots.map((slot) => { const disabled = !availableSlots.includes(slot); return <button type="button" key={slot} disabled={disabled} onClick={() => { setTime(slot); setError(""); }} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${time === slot ? "border-[#3dbf74] bg-[#e5faed] text-[#17633c] ring-2 ring-[#3ee58c]/20" : disabled ? "cursor-not-allowed border-[#e5e8e3] bg-[#f3f4f1] text-[#a6afa9] line-through" : "border-[#d5ddd5] text-[#385145] hover:border-[#7fad8d] hover:bg-[#f5faf5]"}`}>{slot}{disabled && <span className="mt-0.5 block text-[9px] font-medium no-underline">{isPastTime(date, slot) ? "Прошло" : "Недоступно"}</span>}</button>; })}</div>}</div>}</div>}
 
               {step === 4 && <form id="booking-contact-form" onSubmit={submitBooking}><h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#10231d]">Ваши контакты</h2><p className="mt-2 text-sm text-[#718178]">Укажите данные, чтобы завершить запись.</p><div className="mt-6 grid gap-5"><label><span className="mb-2 block text-sm font-semibold text-[#385145]">Имя клиента</span><input value={clientName} onChange={(event) => setClientName(event.target.value)} autoComplete="name" placeholder="Например, Алина" className="w-full rounded-2xl border border-[#d5ddd5] px-4 py-3 outline-none transition placeholder:text-[#a1aca5] focus:border-[#47b875] focus:ring-4 focus:ring-[#3ee58c]/10" /></label><label><span className="mb-2 block text-sm font-semibold text-[#385145]">Телефон или WhatsApp</span><input type="tel" value={contact} onChange={(event) => setContact(event.target.value)} autoComplete="tel" placeholder="+7 700 000 00 00" className="w-full rounded-2xl border border-[#d5ddd5] px-4 py-3 outline-none transition placeholder:text-[#a1aca5] focus:border-[#47b875] focus:ring-4 focus:ring-[#3ee58c]/10" /></label></div></form>}
             </div>

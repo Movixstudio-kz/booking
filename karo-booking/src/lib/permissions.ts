@@ -37,8 +37,24 @@ export function canManageStaff(user: CurrentUser): boolean {
   return user.role === "admin";
 }
 
+export function canViewStaffProfile(
+  user: CurrentUser,
+  staffId: string,
+  isPublic: boolean,
+): boolean {
+  return user.role !== "staff" || user.staffId === staffId || isPublic;
+}
+
 export function canManageServices(user: CurrentUser): boolean {
   return user.role === "admin";
+}
+
+export function canManageClients(user: CurrentUser): boolean {
+  return user.role === "admin";
+}
+
+export function canViewClients(user: CurrentUser): boolean {
+  return user.role !== "staff";
 }
 
 export function canEditStaffSchedule(user: CurrentUser, staffId: string): boolean {

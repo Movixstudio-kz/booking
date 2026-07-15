@@ -1,19 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAppointmentsRepository } from "@/features/appointments/hooks";
 import { timeSlots } from "@/features/booking/data";
-import { loadBookings } from "@/features/booking/services";
-import type { BookingRecord } from "@/features/booking/types";
 import { useStaffSchedules } from "@/features/schedule/hooks";
 import { getScheduleAvailability } from "@/features/schedule/utils";
 import { defaultServices } from "@/features/services/data";
-import { loadServices } from "@/features/services/services";
 import type { ServiceItem } from "@/features/services/types";
 import { defaultStaff } from "@/features/staff/data";
-import { loadStaff } from "@/features/staff/services";
 import type { StaffItem } from "@/features/staff/types";
-import { useCurrentUser, useHydratedStorageState } from "@/hooks";
 import { canViewAppointment, canViewStaffSchedule } from "@/lib/permissions";
+import { repositories } from "@/repositories";
 
 function getToday(): string {
   const now = new Date();
@@ -22,11 +19,36 @@ function getToday(): string {
 }
 
 export function useDashboardData() {
-  const { currentUser } = useCurrentUser();
-  const [allAppointments] = useHydratedStorageState<BookingRecord[]>([], loadBookings);
-  const [staff] = useHydratedStorageState<StaffItem[]>(defaultStaff, loadStaff);
-  const [services] = useHydratedStorageState<ServiceItem[]>(defaultServices, loadServices);
-  const { getSchedule } = useStaffSchedules();
+  const { currentUser, context, appointments: allAppointments } = useAppointmentsRepository();
+  const [staff, setStaff] = useState<StaffItem[]>(defaultStaff);
+  const [services, setServices] = useState<ServiceItem[]>(defaultServices);
+  const { getSchedule } = useStaffSchedules(context);
+
+  const refreshCatalogs = useCallback(async () => {
+    const [staffResult, servicesResult] = await Promise.all([
+      repositories.staff.list(context),
+      repositories.services.list(context),
+    ]);
+    if (staffResult.ok) setStaff(staffResult.data);
+    if (servicesResult.ok) setServices(servicesResult.data);
+  }, [context]);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      void refreshCatalogs();
+    });
+    const unsubscribeStaff = repositories.staff.subscribe(() => {
+      void refreshCatalogs();
+    });
+    const unsubscribeServices = repositories.services.subscribe(() => {
+      void refreshCatalogs();
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      unsubscribeStaff();
+      unsubscribeServices();
+    };
+  }, [refreshCatalogs]);
 
   return useMemo(() => {
     const today = getToday();

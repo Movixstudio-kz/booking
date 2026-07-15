@@ -1,1 +1,1 @@
-export {};
+export { useStaffRepository } from "./useStaffRepository";

@@ -1,1 +1,8 @@
-export { createBooking, deleteBooking, isSlotBooked, loadBookings, updateBooking, updateBookingStatus } from "./booking-storage";
+export {
+  createBooking,
+  loadPublicAvailableSlots,
+  loadPublicSchedule,
+  loadPublicServices,
+  loadPublicStaff,
+  subscribeToPublicBookingData,
+} from "./booking-service";

@@ -1,1 +1,6 @@
-export { changeAppointmentStatus, loadAppointments, removeAppointment } from "./appointment-storage";
+export {
+  changeAppointmentStatus,
+  listAppointments,
+  removeAppointment,
+  saveAppointment,
+} from "./appointment-service";

@@ -64,6 +64,8 @@ export type ScheduledAppointment = {
   date: string;
   time: string;
   durationMinutes: number;
+  bufferBeforeMinutes?: number;
+  bufferAfterMinutes?: number;
   status?: string;
 };
 
