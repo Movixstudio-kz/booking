@@ -1,4 +1,5 @@
 import type { AppointmentRepository } from "@/features/appointments/repositories";
+import { calculateAppointmentRange } from "@/features/appointments/utils";
 import type { StaffRepository } from "@/features/staff/repositories";
 import { createDefaultStaffSchedule, defaultStaffSchedules } from "@/features/schedule/data";
 import type {
@@ -211,17 +212,17 @@ export class LocalStorageScheduleRepository implements ScheduleRepository {
 
     const conflictResults = await Promise.all(
       scheduleAvailableSlots.map(async (time) => {
-        const startAt = shiftLocalDateTime(date, time, -bufferBeforeMinutes);
-        const endAt = shiftLocalDateTime(
-          date,
-          time,
-          durationMinutes + bufferAfterMinutes,
-        );
+        const range = calculateAppointmentRange({
+          startAt: `${date}T${time}:00`,
+          durationMinutes,
+          bufferBeforeMinutes,
+          bufferAfterMinutes,
+        });
         const conflictResult = await this.appointments.checkConflict(
           context,
           staffId,
-          startAt,
-          endAt,
+          range.blockedStartAt,
+          range.blockedEndAt,
           excludeAppointmentId,
         );
         return { time, conflictResult };
@@ -397,23 +398,4 @@ function cloneSchedules(schedules: readonly StaffSchedule[]): StaffSchedule[] {
 
 function isValidNonNegativeInteger(value: number): boolean {
   return Number.isInteger(value) && value >= 0;
-}
-
-function shiftLocalDateTime(
-  date: string,
-  time: string,
-  offsetMinutes: number,
-): string {
-  const [year, month, day] = date.split("-").map(Number);
-  const [hours, minutes] = time.split(":").map(Number);
-  const value = new Date(year, month - 1, day, hours, minutes + offsetMinutes);
-  return `${formatNumber(value.getFullYear(), 4)}-${formatNumber(
-    value.getMonth() + 1,
-  )}-${formatNumber(value.getDate())}T${formatNumber(
-    value.getHours(),
-  )}:${formatNumber(value.getMinutes())}:00`;
-}
-
-function formatNumber(value: number, length = 2): string {
-  return String(value).padStart(length, "0");
 }

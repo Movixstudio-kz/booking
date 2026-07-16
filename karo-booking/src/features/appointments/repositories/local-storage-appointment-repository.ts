@@ -12,7 +12,11 @@ import type {
   BookingRecord,
   BookingStatus,
 } from "@/features/booking/types";
-import { intervalsOverlap, parseDateTime } from "@/features/appointments/utils";
+import {
+  calculateAppointmentRange,
+  intervalsOverlap,
+  parseDateTime,
+} from "@/features/appointments/utils";
 import { LOCAL_STORAGE_KEYS } from "@/repositories/local-schema";
 import { repositoryContextToCurrentUser } from "@/repositories/repository-context";
 import { repositoryFailureFromStorage } from "@/repositories/repository-storage-error";
@@ -129,20 +133,16 @@ function isValidBooking(record: BookingRecord): boolean {
 }
 
 function appointmentInterval(booking: BookingRecord) {
-  const startAt = `${booking.date}T${booking.time}:00`;
-  const start = parseDateTime(startAt);
+  const range = calculateAppointmentRange({
+    startAt: `${booking.date}T${booking.time}:00`,
+    durationMinutes: booking.durationMinutes,
+    bufferBeforeMinutes: booking.bufferBeforeMinutes,
+    bufferAfterMinutes: booking.bufferAfterMinutes,
+  });
+
   return {
-    startAt:
-      start === null
-        ? startAt
-        : new Date(start - booking.bufferBeforeMinutes * 60_000).toISOString(),
-    endAt:
-      start === null
-        ? startAt
-        : new Date(
-            start +
-              (booking.durationMinutes + booking.bufferAfterMinutes) * 60_000,
-          ).toISOString(),
+    startAt: range.blockedStartAt,
+    endAt: range.blockedEndAt,
   };
 }
 

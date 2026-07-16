@@ -1,3 +1,6 @@
+import { calculateAppointmentRange } from "@/features/appointments/utils";
+import { createTimeSlots } from "@/features/booking/utils";
+
 export const CALENDAR_START_MINUTES = 9 * 60;
 export const CALENDAR_END_MINUTES = 20 * 60;
 export const HALF_HOUR_HEIGHT = 44;
@@ -14,13 +17,15 @@ export function minutesToTime(totalMinutes: number): string {
 }
 
 export function getHalfHourSlots(): string[] {
-  const slots: string[] = [];
-  for (let minutes = CALENDAR_START_MINUTES; minutes <= CALENDAR_END_MINUTES; minutes += 30) slots.push(minutesToTime(minutes));
-  return slots;
+  return createTimeSlots();
 }
 
 export function getEndTime(startTime: string, durationMinutes: number): string {
-  return minutesToTime(timeToMinutes(startTime) + durationMinutes);
+  const range = calculateAppointmentRange({
+    startAt: `2000-01-01T${startTime}:00.000Z`,
+    durationMinutes,
+  });
+  return range.visibleEndAt.slice(11, 16);
 }
 
 export function getEventPosition(time: string, durationMinutes: number): { top: number; height: number } {

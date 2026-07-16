@@ -1,3 +1,9 @@
+import {
+  calculateAppointmentRange,
+  intervalsOverlap,
+  parseDateTime,
+  type AppointmentRange,
+} from "@/features/appointments/utils";
 import type {
   ScheduleAvailability,
   ScheduledAppointment,
@@ -8,7 +14,6 @@ import {
   getWeekday,
   isValidDateKey,
   isValidTime,
-  timeToMinutes,
 } from "./time";
 
 export type ScheduleAvailabilityInput = {
@@ -58,51 +63,85 @@ export function getScheduleAvailability({
     !isValidTime(time) ||
     !Number.isFinite(durationMinutes) ||
     durationMinutes <= 0 ||
-    !Number.isFinite(bufferBeforeMinutes) ||
+    !Number.isInteger(bufferBeforeMinutes) ||
     bufferBeforeMinutes < 0 ||
-    !Number.isFinite(bufferAfterMinutes) ||
+    !Number.isInteger(bufferAfterMinutes) ||
     bufferAfterMinutes < 0
   ) {
     return { available: false, reason: "outside_working_hours" };
   }
 
-  const requestedStartMinutes = timeToMinutes(time) - bufferBeforeMinutes;
-  const requestedEndMinutes = timeToMinutes(time) + durationMinutes + bufferAfterMinutes;
-  const requestedDateTime = new Date(`${date}T${time}:00`);
+  const requestedRange = calculateAppointmentRange({
+    startAt: toLocalDateTime(date, time),
+    durationMinutes,
+    bufferBeforeMinutes,
+    bufferAfterMinutes,
+  });
+  const visibleStartTimestamp = parseDateTime(requestedRange.visibleStartAt);
 
-  const availabilityStart = requestedDateTime.getTime() - bufferBeforeMinutes * 60_000;
-  if (availabilityStart < now.getTime()) return { available: false, reason: "past" };
+  if (
+    visibleStartTimestamp === null ||
+    visibleStartTimestamp < now.getTime()
+  ) {
+    return { available: false, reason: "past" };
+  }
   if (isDateInVacation(schedule, date)) return { available: false, reason: "vacation" };
 
   const extraIntervals = schedule.extraWorkingIntervals.filter((interval) => interval.date === date);
-  const isInsideExtraInterval = extraIntervals.some((interval) => intervalContainsMinutes(interval, requestedStartMinutes, requestedEndMinutes));
+  const isInsideExtraInterval = extraIntervals.some((interval) =>
+    intervalContainsRange(interval, date, requestedRange),
+  );
   if (schedule.daysOff.includes(date) && !isInsideExtraInterval) return { available: false, reason: "day_off" };
 
   const workingIntervals = getWorkingIntervalsForDate(schedule, date);
-  if (!workingIntervals.some((interval) => intervalContainsMinutes(interval, requestedStartMinutes, requestedEndMinutes))) {
+  if (
+    !workingIntervals.some((interval) =>
+      intervalContainsRange(interval, date, requestedRange),
+    )
+  ) {
     return { available: false, reason: "outside_working_hours" };
   }
 
   const intersectsBreak = schedule.breaks
     .filter((item) => item.date === date)
-    .some((item) => intervalOverlapsMinutes(item, requestedStartMinutes, requestedEndMinutes));
+    .some((item) =>
+      intervalsOverlap(
+        {
+          startAt: requestedRange.blockedStartAt,
+          endAt: requestedRange.blockedEndAt,
+        },
+        {
+          startAt: toLocalDateTime(item.date, item.start),
+          endAt: toLocalDateTime(item.date, item.end),
+        },
+      ),
+    );
   if (intersectsBreak) return { available: false, reason: "break" };
 
   const intersectsAppointment = appointments.some((appointment) => {
     if (
       appointment.id === excludeAppointmentId ||
       appointment.staffId !== schedule.staffId ||
-      appointment.date !== date ||
       appointment.status === "cancelled"
     ) return false;
 
-    const appointmentStartMinutes =
-      timeToMinutes(appointment.time) - (appointment.bufferBeforeMinutes ?? 0);
-    const appointmentEndMinutes =
-      timeToMinutes(appointment.time) +
-      appointment.durationMinutes +
-      (appointment.bufferAfterMinutes ?? 0);
-    return requestedStartMinutes < appointmentEndMinutes && requestedEndMinutes > appointmentStartMinutes;
+    const appointmentRange = calculateAppointmentRange({
+      startAt: toLocalDateTime(appointment.date, appointment.time),
+      durationMinutes: appointment.durationMinutes,
+      bufferBeforeMinutes: appointment.bufferBeforeMinutes,
+      bufferAfterMinutes: appointment.bufferAfterMinutes,
+    });
+
+    return intervalsOverlap(
+      {
+        startAt: requestedRange.blockedStartAt,
+        endAt: requestedRange.blockedEndAt,
+      },
+      {
+        startAt: appointmentRange.blockedStartAt,
+        endAt: appointmentRange.blockedEndAt,
+      },
+    );
   });
 
   return intersectsAppointment
@@ -136,10 +175,26 @@ export function getAvailableScheduleSlots(
   }));
 }
 
-function intervalContainsMinutes(interval: TimeInterval, startMinutes: number, endMinutes: number): boolean {
-  return timeToMinutes(interval.start) <= startMinutes && timeToMinutes(interval.end) >= endMinutes;
+function intervalContainsRange(
+  interval: TimeInterval,
+  date: string,
+  range: AppointmentRange,
+): boolean {
+  const intervalStart = parseDateTime(toLocalDateTime(date, interval.start));
+  const intervalEnd = parseDateTime(toLocalDateTime(date, interval.end));
+  const visibleStart = parseDateTime(range.visibleStartAt);
+  const visibleEnd = parseDateTime(range.visibleEndAt);
+
+  return (
+    intervalStart !== null &&
+    intervalEnd !== null &&
+    visibleStart !== null &&
+    visibleEnd !== null &&
+    intervalStart <= visibleStart &&
+    intervalEnd >= visibleEnd
+  );
 }
 
-function intervalOverlapsMinutes(interval: TimeInterval, startMinutes: number, endMinutes: number): boolean {
-  return timeToMinutes(interval.start) < endMinutes && timeToMinutes(interval.end) > startMinutes;
+function toLocalDateTime(date: string, time: string): string {
+  return `${date}T${time}:00`;
 }

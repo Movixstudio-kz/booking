@@ -7,6 +7,7 @@ import type {
   BookingStatus,
   CreateBookingResult,
 } from "@/features/booking/types";
+import { calculateAppointmentRange } from "@/features/appointments/utils";
 import { repositories } from "@/repositories";
 import type {
   RepositoryContext,
@@ -25,17 +26,17 @@ export async function saveAppointment(
   appointment: BookingRecord,
   isEditing: boolean,
 ): Promise<CreateBookingResult> {
-  const serviceStartAt = `${appointment.date}T${appointment.time}:00`;
-  const startAt = addMinutes(serviceStartAt, -appointment.bufferBeforeMinutes);
-  const endAt = addMinutes(
-    serviceStartAt,
-    appointment.durationMinutes + appointment.bufferAfterMinutes,
-  );
+  const range = calculateAppointmentRange({
+    startAt: `${appointment.date}T${appointment.time}:00`,
+    durationMinutes: appointment.durationMinutes,
+    bufferBeforeMinutes: appointment.bufferBeforeMinutes,
+    bufferAfterMinutes: appointment.bufferAfterMinutes,
+  });
   const conflict = await repositories.appointments.checkConflict(
     context,
     appointment.staffId,
-    startAt,
-    endAt,
+    range.blockedStartAt,
+    range.blockedEndAt,
     isEditing ? appointment.id : undefined,
   );
 
@@ -97,16 +98,4 @@ function mapRepositoryFailure(
     return { ok: false, reason: "schedule_unavailable" };
   }
   return { ok: false, reason: "storage_error" };
-}
-
-function addMinutes(localDateTime: string, minutesToAdd: number): string {
-  const [date, time] = localDateTime.split("T");
-  const [year, month, day] = date.split("-").map(Number);
-  const [hours, minutes] = time.split(":").map(Number);
-  const value = new Date(year, month - 1, day, hours, minutes + minutesToAdd);
-  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:00`;
-}
-
-function pad(value: number): string {
-  return String(value).padStart(2, "0");
 }
