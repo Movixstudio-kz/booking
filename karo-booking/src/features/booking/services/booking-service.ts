@@ -1,5 +1,6 @@
 import { saveAppointment } from "@/features/appointments/services";
 import type { BookingRecord, CreateBookingResult } from "@/features/booking/types";
+import type { Organization } from "@/features/organizations/types";
 import type { ListAvailableSlotsParams } from "@/features/schedule/repositories";
 import type { StaffSchedule } from "@/features/schedule/types";
 import type { ServiceItem } from "@/features/services/types";
@@ -16,6 +17,12 @@ export function loadPublicServices(): Promise<RepositoryResult<ServiceItem[]>> {
 
 export function loadPublicStaff(): Promise<RepositoryResult<PublicStaffItem[]>> {
   return repositories.staff.listPublic(publicBookingContext);
+}
+
+export function loadPublicOrganization(
+  slug: string,
+): Promise<RepositoryResult<Organization>> {
+  return repositories.organizations.getBySlug(publicBookingContext, slug);
 }
 
 export function loadPublicSchedule(

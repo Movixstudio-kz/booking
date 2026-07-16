@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" role="img" aria-labelledby="title">
+  <title id="title">Айгерим</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d7f8e3"/><stop offset="1" stop-color="#9be6bd"/></linearGradient></defs>
+  <rect width="640" height="480" fill="url(#bg)"/>
+  <circle cx="320" cy="188" r="82" fill="#f4c9ad"/>
+  <path d="M238 188c0-92 164-104 164 3-20-21-42-37-83-37-35 0-58 14-81 34Z" fill="#2d332f"/>
+  <path d="M171 480c12-126 72-185 149-185s139 59 150 185H171Z" fill="#315f4a"/>
+  <circle cx="292" cy="191" r="5" fill="#29352f"/><circle cx="348" cy="191" r="5" fill="#29352f"/>
+  <path d="M299 230c14 10 30 10 43 0" fill="none" stroke="#9d5e54" stroke-width="5" stroke-linecap="round"/>
+</svg>

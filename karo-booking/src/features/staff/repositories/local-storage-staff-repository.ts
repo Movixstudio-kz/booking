@@ -21,11 +21,20 @@ import type {
   UpdateStaffInput,
 } from "./staff-repository";
 
+type LegacyStaffItem = Omit<
+  StaffItem,
+  "publicSlug" | "photoUrl" | "description"
+> & {
+  publicSlug?: string;
+  photoUrl?: string;
+  description?: string;
+};
+
 function createId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `staff-${Date.now()}`;
 }
 
-function isStaffItem(value: unknown): value is StaffItem {
+function isLegacyStaffItem(value: unknown): value is LegacyStaffItem {
   if (typeof value !== "object" || value === null) return false;
   const item = value as Record<string, unknown>;
   return (
@@ -36,8 +45,21 @@ function isStaffItem(value: unknown): value is StaffItem {
     typeof item.calendarColor === "string" &&
     typeof item.isActive === "boolean" &&
     Array.isArray(item.serviceIds) &&
-    item.serviceIds.every((id) => typeof id === "string")
+    item.serviceIds.every((id) => typeof id === "string") &&
+    (item.publicSlug === undefined || typeof item.publicSlug === "string") &&
+    (item.photoUrl === undefined || typeof item.photoUrl === "string") &&
+    (item.description === undefined || typeof item.description === "string")
   );
+}
+
+function normalizeStaff(item: LegacyStaffItem): StaffItem {
+  const defaults = defaultStaff.find((member) => member.id === item.id);
+  return {
+    ...item,
+    publicSlug: item.publicSlug?.trim() || defaults?.publicSlug || item.id,
+    photoUrl: item.photoUrl ?? defaults?.photoUrl ?? "",
+    description: item.description ?? defaults?.description ?? "",
+  };
 }
 
 function isValidStaff(item: StaffItem): boolean {
@@ -47,7 +69,10 @@ function isValidStaff(item: StaffItem): boolean {
     item.position.trim().length > 0 &&
     item.phone.replace(/\D/g, "").length >= 7 &&
     /^#[0-9a-f]{6}$/i.test(item.calendarColor) &&
-    item.serviceIds.every((id) => id.trim().length > 0)
+    item.serviceIds.every((id) => id.trim().length > 0) &&
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.publicSlug) &&
+    typeof item.photoUrl === "string" &&
+    typeof item.description === "string"
   );
 }
 
@@ -84,7 +109,7 @@ export class LocalStorageStaffRepository implements StaffRepository {
     if (context.accessMode !== "public_booking") {
       return repositoryFailure("forbidden");
     }
-    const stored = this.readAll();
+    const stored = this.readAll(true);
     if (!stored.ok) return stored;
     return repositorySuccess(
       filterByOrganization(context, stored.data)
@@ -128,7 +153,12 @@ export class LocalStorageStaffRepository implements StaffRepository {
 
     const stored = this.readAll();
     if (!stored.ok) return stored;
-    if (stored.data.some((member) => member.id === item.id)) {
+    if (
+      stored.data.some(
+        (member) =>
+          member.id === item.id || member.publicSlug === item.publicSlug,
+      )
+    ) {
       return repositoryFailure(
         "conflict",
         "Сотрудник с таким идентификатором уже существует.",
@@ -154,6 +184,16 @@ export class LocalStorageStaffRepository implements StaffRepository {
     if (index < 0) return repositoryFailure("not_found");
     const item = { ...stored.data[index], ...input, id };
     if (!isValidStaff(item)) return repositoryFailure("validation_error");
+    if (
+      stored.data.some(
+        (member) => member.id !== id && member.publicSlug === item.publicSlug,
+      )
+    ) {
+      return repositoryFailure(
+        "conflict",
+        "Публичная ссылка уже используется другим сотрудником.",
+      );
+    }
 
     const next = [...stored.data];
     next[index] = item;
@@ -188,14 +228,19 @@ export class LocalStorageStaffRepository implements StaffRepository {
     );
   }
 
-  private readAll(): RepositoryResult<StaffItem[]> {
+  private readAll(allowServerDefaults = false): RepositoryResult<StaffItem[]> {
     const read = this.storage.get<unknown>(LOCAL_STORAGE_KEYS.staff);
-    if (!read.ok) return repositoryFailureFromStorage(read);
+    if (!read.ok) {
+      if (allowServerDefaults && read.error === "storage_unavailable") {
+        return repositorySuccess(defaultStaff);
+      }
+      return repositoryFailureFromStorage(read);
+    }
     if (read.data === null) return repositorySuccess(defaultStaff);
-    if (!Array.isArray(read.data) || !read.data.every(isStaffItem)) {
+    if (!Array.isArray(read.data) || !read.data.every(isLegacyStaffItem)) {
       return repositoryFailure("validation_error");
     }
-    return repositorySuccess(read.data);
+    return repositorySuccess(read.data.map(normalizeStaff));
   }
 }
 
@@ -207,5 +252,8 @@ function toPublicStaffItem(item: StaffItem): PublicStaffItem {
     calendarColor: item.calendarColor,
     isActive: item.isActive,
     serviceIds: [...item.serviceIds],
+    publicSlug: item.publicSlug,
+    photoUrl: item.photoUrl,
+    description: item.description,
   };
 }

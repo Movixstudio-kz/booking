@@ -101,7 +101,7 @@ export class LocalStorageServiceRepository implements ServiceRepository {
     context: RepositoryContext,
     options?: ServiceListOptions,
   ): Promise<RepositoryResult<ServiceItem[]>> {
-    const stored = this.readAll();
+    const stored = this.readAll(context.accessMode === "public_booking");
     if (!stored.ok) return stored;
     const tenantServices = filterByOrganization(context, stored.data);
     if (context.accessMode === "public_booking") {
@@ -205,9 +205,14 @@ export class LocalStorageServiceRepository implements ServiceRepository {
     );
   }
 
-  private readAll(): RepositoryResult<ServiceItem[]> {
+  private readAll(allowServerDefaults = false): RepositoryResult<ServiceItem[]> {
     const read = this.storage.get<unknown>(LOCAL_STORAGE_KEYS.services);
-    if (!read.ok) return repositoryFailureFromStorage(read);
+    if (!read.ok) {
+      if (allowServerDefaults && read.error === "storage_unavailable") {
+        return repositorySuccess(defaultServices);
+      }
+      return repositoryFailureFromStorage(read);
+    }
     if (read.data === null) return repositorySuccess(defaultServices);
     if (!Array.isArray(read.data) || !read.data.every(isLegacyServiceItem)) {
       return repositoryFailure("validation_error");

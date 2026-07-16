@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 104 104" role="img" aria-labelledby="title">
+  <title id="title">KARO Beauty</title>
+  <rect width="104" height="104" rx="30" fill="#10231d"/>
+  <circle cx="77" cy="27" r="12" fill="#3ee58c" opacity=".9"/>
+  <path d="M29 24v56h13V59l20 21h18L52 51l25-27H60L42 45V24H29Z" fill="#f6f8f1"/>
+</svg>

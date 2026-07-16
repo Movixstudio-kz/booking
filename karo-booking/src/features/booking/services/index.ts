@@ -1,6 +1,7 @@
 export {
   createBooking,
   loadPublicAvailableSlots,
+  loadPublicOrganization,
   loadPublicSchedule,
   loadPublicServices,
   loadPublicStaff,

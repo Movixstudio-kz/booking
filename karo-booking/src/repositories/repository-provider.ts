@@ -1,5 +1,7 @@
 import { LocalStorageAppointmentRepository } from "@/features/appointments/repositories";
 import { LocalStorageClientRepository } from "@/features/clients/repositories";
+import { defaultOrganizations } from "@/features/organizations/data";
+import { StaticOrganizationRepository } from "@/features/organizations/repositories";
 import { LocalStorageScheduleRepository } from "@/features/schedule/repositories";
 import { LocalStorageServiceRepository } from "@/features/services/repositories";
 import { LocalStorageStaffRepository } from "@/features/staff/repositories";
@@ -60,6 +62,7 @@ const staff = new LocalStorageStaffRepository(storage);
 const services = new LocalStorageServiceRepository(storage);
 const clients = new LocalStorageClientRepository(storage);
 const schedules = new LocalStorageScheduleRepository(appointments, staff, storage);
+const organizations = new StaticOrganizationRepository(defaultOrganizations);
 
 export const repositories = Object.freeze({
   appointments,
@@ -67,6 +70,7 @@ export const repositories = Object.freeze({
   services,
   clients,
   schedules,
+  organizations,
 });
 
 export function createRepositoryContext(user: CurrentUser): RepositoryContext {

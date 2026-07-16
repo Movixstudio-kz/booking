@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" role="img" aria-labelledby="title">
+  <title id="title">Алия</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f2eafe"/><stop offset="1" stop-color="#cbb5ee"/></linearGradient></defs>
+  <rect width="640" height="480" fill="url(#bg)"/>
+  <circle cx="320" cy="188" r="82" fill="#f0c5a7"/>
+  <path d="M232 197c-8-98 45-139 91-139 79 0 103 69 88 159-19-42-45-68-91-68-41 0-65 19-88 48Z" fill="#40332e"/>
+  <path d="M171 480c12-126 72-185 149-185s139 59 150 185H171Z" fill="#725b91"/>
+  <circle cx="292" cy="191" r="5" fill="#29352f"/><circle cx="348" cy="191" r="5" fill="#29352f"/>
+  <path d="M299 230c14 10 30 10 43 0" fill="none" stroke="#9d5e54" stroke-width="5" stroke-linecap="round"/>
+</svg>
